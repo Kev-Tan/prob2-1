@@ -1,0 +1,240 @@
+#include "basicDS.h"
+#include <algorithm>
+#include <vector>
+#include <queue>
+#include <limits>
+
+/* You can add more functions or variables in each class.
+   But you "Shall Not" delete any functions or variables that TAs defined. */
+
+class Problem2 {
+public:
+
+	Problem2(Graph G);  //constructor
+	~Problem2();        //destructor
+	bool insert(int id, int s, Set D, int t, Graph &G, Tree &MTid);
+	void stop(int id, Graph &G, Forest &MTidForest);
+	void rearrange(Graph &G, Forest &MTidForest);
+};
+
+Problem2::Problem2(Graph G) {
+	/* Write your code here. */
+
+}
+
+Problem2::~Problem2() {
+	/* Write your code here. */
+
+}
+
+double bandwidthCostAdjustment(double Be, double Be_k, double beta) {
+    double utilization_ratio = Be_k / (Be - 1);
+    double adjusted_cost = Be * (pow(beta, 1 - utilization_ratio) - 1);
+
+    return adjusted_cost;
+}
+
+Graph tempGraphCreator(Graph G, int t){
+    Graph copyGraph = G;
+    for (auto it = copyGraph.E.begin(); it != copyGraph.E.end();) {
+        if (t > it->b) {
+            //cout << "Bye" << endl;
+            it = copyGraph.E.erase(it); // Remove the edge that meets the condition
+        } else {
+            //Reward the smaller it is
+            //it->ce = (0.8 *(bandwidthCostAdjustment(it->b, (it->b)-t, 3))) + (0.2*it->ce);
+            ++it; // Move to the next edge
+        }
+    }
+    return copyGraph;
+}
+
+void graphEdgeAdjust(Graph& G, int t) {
+    for (auto it = G.E.begin(); it != G.E.end(); ++it) {
+        it->ce = (0.8 * (bandwidthCostAdjustment(it->b, (it->b) - t, 3))) + (0.2 * it->ce);
+    }
+}
+
+
+//Find suitable graphEdge source for prim
+vector<graphEdge> primEdgeFinder(const Graph& g, int startVertex){
+    vector<graphEdge> pathsConnected;
+    for (const auto& edge : g.E) {
+        if(edge.vertex[0]==startVertex || edge.vertex[1]==startVertex) pathsConnected.push_back(edge); //If either one of the edge are connected to start vertex, then push back
+    }
+    return pathsConnected;
+}
+
+vector<treeEdge> dfsEdgeFinder(const Tree& g, int startVertex){
+    vector<treeEdge> pathsConnected;
+    for (const auto& edge : g.E) {
+        if(edge.vertex[0]==startVertex || edge.vertex[1]==startVertex){ //If either one of the edge are connected to start vertex, then push back
+            treeEdge tempTreeEdge;
+            tempTreeEdge.vertex[0] = edge.vertex[0];
+            tempTreeEdge.vertex[1] = edge.vertex[1];
+            pathsConnected.push_back(tempTreeEdge);
+        }
+    }
+    return pathsConnected;
+}
+
+
+//Priority queue comparator
+struct CompareCost {
+    bool operator()(const graphEdge& e1, const graphEdge& e2) {
+        return e1.ce > e2.ce; //Function to help sorting for min heap
+    }
+};
+
+
+
+void prim(const Graph& G, int startVertex, Tree &MTid) {
+
+    //Set total for path to  be added
+    int total = 0;
+
+    //Heap based Prim algorithm
+    priority_queue<graphEdge, vector<graphEdge>, CompareCost> minHeap;
+    vector<graphEdge> pathsConnected = primEdgeFinder(G, startVertex);
+
+    //Declaration
+    int V = G.V.size();
+    vector<int> key(V, INT_MAX);
+    vector<bool> inMST(V, false);
+
+    // Mark the starting vertex as part of the MST
+    inMST[startVertex] = true;
+    MTid.V.push_back(startVertex);
+    key[startVertex] = 0;
+
+    // Add edges connected to the starting vertex to the minHeap
+    for (const auto& edge : pathsConnected) {
+        minHeap.push(edge);
+    }
+
+    while (!minHeap.empty()) {
+        //Start from top heap
+        graphEdge currentEdge = minHeap.top();
+        minHeap.pop();
+
+        //Find out which one is the node that hasn't been visited
+        int u = currentEdge.vertex[0];
+        int v = currentEdge.vertex[1];
+
+        if (inMST[u] && inMST[v]) continue; // Both vertices are in MST, skip
+
+        //Push directly to MTid
+        treeEdge edgeToBePushed;
+        edgeToBePushed.vertex[0] = currentEdge.vertex[0];
+        edgeToBePushed.vertex[1] = currentEdge.vertex[1];
+        MTid.E.push_back(edgeToBePushed);
+        total += currentEdge.ce;
+
+        int newVertex = inMST[u] ? v : u;
+        inMST[newVertex] = true;
+        MTid.V.push_back(newVertex);
+
+        // Find new connections for the newVertex
+        vector<graphEdge> newPathsConnected = primEdgeFinder(G, newVertex);
+        for (const auto& edge : newPathsConnected) {
+            int nextVertex = (edge.vertex[0] == newVertex) ? edge.vertex[1] : edge.vertex[0];
+            if (!inMST[nextVertex]) {
+                minHeap.push(edge);
+            }
+        }
+    }
+        MTid.ct = total;
+}
+
+void dfs(int vertex, int parent, Tree G, Set D) {
+    cout << "DFS RUN\n";
+    int total_weight = 0;
+
+    auto connected_paths = dfsEdgeFinder(G, vertex);
+    for (auto &edge : connected_paths) {
+        cout << edge.vertex[0] << " -> " << edge.vertex[1] << endl;
+    }
+    for (auto &edge : connected_paths) {
+        if(edge.vertex[0]==parent || edge.vertex[1]==parent) continue;
+        int Neighbor;
+        if(vertex!=edge.vertex[0]) Neighbor = edge.vertex[0];
+        else Neighbor = edge.vertex[1];
+        cout << "Neighbor is " << Neighbor << " vertex is " << vertex << " parent is " << parent << endl;
+        dfs(Neighbor, vertex, G, D);
+    }
+
+
+
+    int trigger = 0;
+    for (int i = 0; i < D.size; i++) {
+        if (D.destinationVertices[i] == vertex)
+            trigger = 1;
+    }
+
+    if (!trigger) total_weight = std::min(total_weight, 0);
+    else cout << "Found path to " << vertex << endl;
+}
+
+
+
+int steiner_tree(Set D, Tree G){
+    //Tree mstTree = G; //mstTree = G
+    cout << "Steiner tree start\n";
+    auto root = D.destinationVertices[0]; //Get a destination node and root it there
+    dfs(root, -1, G, D);
+}
+
+
+bool Problem2::insert(int id, int s, Set D, int t, Graph &G, Tree &MTid) {
+	/* Store your output graph and multicast tree into G and MTid */
+
+    cout << "Prob 2 Insert triggered" << endl;
+	/* Write your code here. */
+	Graph tempGraph = tempGraphCreator(G, t);
+	graphEdgeAdjust(tempGraph, t);
+	Tree tempMST;
+
+	for(auto& edge:tempGraph.E){
+        cout << edge.vertex[0] << " -> " << edge.vertex[1] << " with b of " <<edge.ce <<endl;
+	}
+
+	prim(tempGraph, s, tempMST);
+
+	cout << "After prim\n";
+	for(auto& edge:tempMST.E){
+        cout << edge.vertex[0] << " -> " << edge.vertex[1] <<endl;
+	}
+
+
+    for(auto dest: D.destinationVertices){
+        cout << dest << " ";
+    }
+    cout << endl;
+
+    int val = steiner_tree(D, tempMST);
+    cout << "Val is " << val << endl;
+
+
+    cout << "Prob2 insert end" << endl;
+
+	/* You should return true or false according the insertion result */
+	return true;
+}
+
+void Problem2::stop(int id, Graph &G, Forest &MTidForest) {
+	/* Store your output graph and multicast tree forest into G and MTidForest
+	   Note: Please "only" include mutlicast trees that you added nodes in MTidForest. */
+
+	/* Write your code here. */
+
+	return;
+}
+
+void Problem2::rearrange(Graph &G, Forest &MTidForest) {
+	/* Store your output graph and multicast tree forest into G and MTidForest
+	   Note: Please include "all" active mutlicast trees in MTidForest. */
+
+	/* Write your code here. */
+
+	return;
+}
